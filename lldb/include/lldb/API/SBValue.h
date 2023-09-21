@@ -374,6 +374,9 @@ public:
   lldb::SBWatchpoint WatchPointee(bool resolve_location, bool read, bool write,
                                   SBError &error);
 
+  /// TODO(toyang):
+  lldb::SBValue GetVTable();
+
 protected:
   friend class SBBlock;
   friend class SBFrame;

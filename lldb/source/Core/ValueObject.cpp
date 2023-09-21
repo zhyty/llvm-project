@@ -607,6 +607,9 @@ bool ValueObject::GetSummaryAsCString(TypeSummaryImpl *summary_ptr,
       m_synthetic_value->UpdateValueIfNeeded(); // the summary might depend on
                                                 // the synthetic children being
                                                 // up-to-date (e.g. ${svar%#})
+    // TODO(toyang): I think we might need to change the implementation of
+    // `FormatObject`? I think it's generally bad to set the summary str
+    // ourselves
     summary_ptr->FormatObject(this, destination, actual_options);
   }
   m_flags.m_is_getting_summary = false;

@@ -23,6 +23,7 @@
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectConstResult.h"
+#include "lldb/Core/ValueObjectVTable.h"
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/Symbol/Block.h"
 #include "lldb/Symbol/ObjectFile.h"
@@ -44,6 +45,10 @@
 #include "lldb/API/SBProcess.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBThread.h"
+#include "lldb/lldb-enumerations.h"
+#include "lldb/lldb-types.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <memory>
 
@@ -114,7 +119,7 @@ public:
 
     Target *target = value_sp->GetTargetSP().get();
     // If this ValueObject holds an error, then it is valuable for that.
-    if (value_sp->GetError().Fail()) 
+    if (value_sp->GetError().Fail())
       return value_sp;
 
     if (!target)
@@ -1038,9 +1043,9 @@ lldb::ValueObjectSP SBValue::GetSP(ValueLocker &locker) const {
   // IsValid means that the SBValue has a value in it.  But that's not the
   // only time that ValueObjects are useful.  We also want to return the value
   // if there's an error state in it.
-  if (!m_opaque_sp || (!m_opaque_sp->IsValid() 
-      && (m_opaque_sp->GetRootSP() 
-          && !m_opaque_sp->GetRootSP()->GetError().Fail()))) {
+  if (!m_opaque_sp || (!m_opaque_sp->IsValid() &&
+                       (m_opaque_sp->GetRootSP() &&
+                        !m_opaque_sp->GetRootSP()->GetError().Fail()))) {
     locker.GetError().SetErrorString("No value");
     return ValueObjectSP();
   }
@@ -1497,4 +1502,15 @@ lldb::SBValue SBValue::Persist() {
     persisted_sb.SetSP(value_sp->Persist());
   }
   return persisted_sb;
+}
+
+lldb::SBValue SBValue::GetVTable() {
+  SBValue vtable_sb;
+  ValueLocker locker;
+  lldb::ValueObjectSP value_sp(GetSP(locker));
+  if (!value_sp)
+    return vtable_sb;
+
+  vtable_sb.SetSP(ValueObjectVTable::Create(*value_sp));
+  return vtable_sb;
 }
