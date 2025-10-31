@@ -157,6 +157,9 @@ struct DAP final : public DAPTransport::MessageHandler {
   /// Whether to disable sourcing .lldbinit files.
   bool no_lldbinit;
 
+  /// TODO(toyang):
+  bool use_suffix_matching_breakpoints;
+
   /// The initial thread list upon attaching.
   std::vector<protocol::Thread> initial_thread_list;
 
@@ -181,14 +184,16 @@ struct DAP final : public DAPTransport::MessageHandler {
   ///     allocated.
   /// \param[in] no_lldbinit
   ///     Whether to disable sourcing .lldbinit files.
+  /// \param[in] use_suffix_matching_breakpoints
+  ///     TODO(toyang):
   /// \param[in] transport
   ///     Transport for this debug session.
   /// \param[in] loop
   ///     Main loop associated with this instance.
   DAP(Log *log, const ReplMode default_repl_mode,
       std::vector<std::string> pre_init_commands, bool no_lldbinit,
-      llvm::StringRef client_name, DAPTransport &transport,
-      lldb_private::MainLoop &loop);
+      bool use_suffix_matching_breakpoints, llvm::StringRef client_name,
+      DAPTransport &transport, lldb_private::MainLoop &loop);
 
   ~DAP();
 

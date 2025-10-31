@@ -123,11 +123,13 @@ llvm::StringRef DAP::debug_adapter_path = "";
 
 DAP::DAP(Log *log, const ReplMode default_repl_mode,
          std::vector<std::string> pre_init_commands, bool no_lldbinit,
-         llvm::StringRef client_name, DAPTransport &transport, MainLoop &loop)
+         bool use_suffix_matching_breakpoints, llvm::StringRef client_name,
+         DAPTransport &transport, MainLoop &loop)
     : log(log), transport(transport), broadcaster("lldb-dap"),
       progress_event_reporter(
           [&](const ProgressEvent &event) { SendJSON(event.ToJSON()); }),
       repl_mode(default_repl_mode), no_lldbinit(no_lldbinit),
+      use_suffix_matching_breakpoints(use_suffix_matching_breakpoints),
       m_client_name(client_name), m_loop(loop) {
   configuration.preInitCommands = std::move(pre_init_commands);
   RegisterRequests();
@@ -1578,6 +1580,7 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   return response_breakpoints;
 }
 
+// TODO(toyang): prototype here?
 std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
     const protocol::Source &source,
     const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints,
