@@ -10,6 +10,8 @@
 #define LLDB_API_SBFILESPEC_H
 
 #include "lldb/API/SBDefines.h"
+#include <vector>
+#include "llvm/ADT/StringRef.h"
 
 namespace lldb {
 
@@ -58,6 +60,8 @@ public:
   bool GetDescription(lldb::SBStream &description) const;
 
   void AppendPathComponent(const char *file_or_directory);
+
+  std::vector<llvm::StringRef> GetComponents() const;
 
 private:
   friend class SBAttachInfo;

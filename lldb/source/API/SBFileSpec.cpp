@@ -180,3 +180,9 @@ void SBFileSpec::AppendPathComponent(const char *fn) {
 
   m_opaque_up->AppendPathComponent(fn);
 }
+
+std::vector<llvm::StringRef> SBFileSpec::GetComponents() const {
+  LLDB_INSTRUMENT_VA(this);
+
+  return m_opaque_up->GetComponents();
+}
