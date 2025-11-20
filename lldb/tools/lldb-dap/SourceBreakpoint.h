@@ -50,6 +50,8 @@ public:
   uint32_t GetLine() const { return m_line; }
   uint32_t GetColumn() const { return m_column; }
 
+  bool GetUseSuffixMatching() const { return m_suffix_matching; }
+
 protected:
   void CreatePathBreakpoint(const protocol::Source &source);
   llvm::Error
@@ -72,6 +74,10 @@ protected:
 
   uint32_t m_line;   ///< The source line of the breakpoint or logpoint
   uint32_t m_column; ///< An optional source column of the breakpoint
+
+private:
+  bool m_suffix_matching; ///< Whether to use suffix-based best matching for
+                          ///< path if breakpoint is unresolved.
 };
 
 } // namespace lldb_dap

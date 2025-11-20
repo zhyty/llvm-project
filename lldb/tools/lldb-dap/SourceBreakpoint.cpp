@@ -12,6 +12,7 @@
 #include "JSONUtils.h"
 #include "ProtocolUtils.h"
 #include "lldb/API/SBBreakpoint.h"
+#include "lldb/API/SBBreakpointLocation.h"
 #include "lldb/API/SBFileSpec.h"
 #include "lldb/API/SBFileSpecList.h"
 #include "lldb/API/SBFrame.h"
@@ -36,7 +37,8 @@ SourceBreakpoint::SourceBreakpoint(DAP &dap,
     : Breakpoint(dap, breakpoint.condition, breakpoint.hitCondition),
       m_log_message(breakpoint.logMessage.value_or("")),
       m_line(breakpoint.line),
-      m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)) {}
+      m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)),
+      m_suffix_matching(dap.use_suffix_matching_breakpoints) {}
 
 llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
   lldb::SBMutex lock = m_dap.GetAPIMutex();
@@ -66,6 +68,7 @@ llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
 
   if (!m_log_message.empty())
     SetLogMessage();
+  // TODO(toyang): not too sure what SetBreakpoint does here
   Breakpoint::SetBreakpoint();
   return llvm::Error::success();
 }
@@ -78,11 +81,98 @@ void SourceBreakpoint::UpdateBreakpoint(const SourceBreakpoint &request_bp) {
   BreakpointBase::UpdateBreakpoint(request_bp);
 }
 
+/// Count how many path components match between `target` and `query`, starting
+/// from the suffix (i.e. filename).
+static size_t CountMatchingComponents(const lldb::SBFileSpec &target,
+                                      const lldb::SBFileSpec &query) {
+  const auto target_components = target.GetComponents();
+  const auto query_components = query.GetComponents();
+  size_t matches = 0;
+
+  auto target_rit = target_components.rbegin();
+  auto query_rit = query_components.rbegin();
+
+  for (; target_rit != target_components.rend() &&
+         query_rit != query_components.rend();
+       ++target_rit, ++query_rit) {
+    if (*target_rit == *query_rit)
+      matches++;
+  }
+
+  return matches;
+}
+
+// TODO(toyang): unit testing? Better naming?
+static void
+OnlyEnableMaximallyMatchingLocations(const lldb::SBFileSpec &target_spec,
+                                     lldb::SBBreakpoint &bp) {
+  size_t maximal_match_so_far = 0;
+  // Typically, we would expect there to only be 1 breakpoint location that
+  // uniquely maximally matches the `target_spec`. However, in the case of ties,
+  // we want to choose all tying breakpoint locations.
+  std::set<size_t> maximal_match_indices;
+
+  // Get the maximal matches.
+  const auto num_locations = bp.GetNumLocations();
+  for (size_t i = 0; i < num_locations; ++i) {
+    const size_t current_match = CountMatchingComponents(
+        target_spec,
+        bp.GetLocationAtIndex(i).GetAddress().GetLineEntry().GetFileSpec());
+    // TODO(toyang): does this have to be threadsafe?
+
+    if (current_match == maximal_match_so_far) {
+      // Handle ties.
+      maximal_match_indices.insert(i);
+    } else if (current_match > maximal_match_so_far) {
+      // New maximal match.
+      maximal_match_so_far = current_match;
+      maximal_match_indices.clear();
+      maximal_match_indices.insert(i);
+    }
+  }
+
+  // Disable all locations that weren't the maximal matches.
+  for (size_t i = 0; i < num_locations; ++i) {
+    if (maximal_match_indices.find(i) != maximal_match_indices.end())
+      continue;
+    bp.GetLocationAtIndex(i).SetEnabled(false);
+  }
+}
 void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
   const auto source_path = source.path.value_or("");
   lldb::SBFileSpecList module_list;
-  m_bp = m_dap.target.BreakpointCreateByLocation(source_path.c_str(), m_line,
-                                                 m_column, 0, module_list);
+
+  // Breakpoint created by using the entirety of the path provided by
+  // `source_path`.
+  lldb::SBBreakpoint full_path_bp = m_dap.target.BreakpointCreateByLocation(
+      source_path.c_str(), m_line, m_column, 0, module_list);
+  // TODO(toyang): double-check if we want num locations or resolved locations?
+  if (!GetUseSuffixMatching() || full_path_bp.GetNumLocations() > 0) {
+    m_bp = full_path_bp;
+    return;
+  }
+
+  // TODO(toyang): breakpoints might not be resolved yet because missing dyld
+  // load. Need to test this.
+
+  // TODO(toyang): explain the scheme
+
+  // Fall back to suffix-based matching since the source_path breakpoint didn't
+  // resolve to any locations.
+
+  // TODO(toyang): delete the full path bp?
+
+  const lldb::SBFileSpec source_file_spec(source_path.c_str());
+  lldb::SBBreakpoint filename_bp = m_dap.target.BreakpointCreateByLocation(
+      source_file_spec.GetFilename(), m_line, m_column, 0, module_list);
+
+  OnlyEnableMaximallyMatchingLocations(source_file_spec, filename_bp);
+
+  m_bp = filename_bp;
+  // TODO(toyang): if there are multiple locations, choose the best one and
+  // disable the rest.
+  // TODO(toyang): symlinks and source maps?
+  // TODO(toyang): breakpoint update
 }
 
 llvm::Error SourceBreakpoint::CreateAssemblyBreakpointWithSourceReference(

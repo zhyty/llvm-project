@@ -1572,6 +1572,7 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   } else {
     // Breakpoint set by a regular source file.
     const auto path = source.path.value_or("");
+    // TODO(toyang): maybe we need to change path here already?
     auto &existing_breakpoints = m_source_breakpoints[path];
     response_breakpoints =
         SetSourceBreakpoints(source, breakpoints, existing_breakpoints);

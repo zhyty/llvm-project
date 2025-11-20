@@ -418,7 +418,7 @@ struct DAP final : public DAPTransport::MessageHandler {
 
   /// Sets the given protocol `breakpoints` in the given `source`, while
   /// removing any existing breakpoints in the given source if they are not in
-  /// `breakpoint`.
+  /// `breakpoints`.
   ///
   /// \param[in] source
   ///   The relevant source of the breakpoints.
