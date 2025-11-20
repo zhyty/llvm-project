@@ -38,7 +38,9 @@ SourceBreakpoint::SourceBreakpoint(DAP &dap,
       m_log_message(breakpoint.logMessage.value_or("")),
       m_line(breakpoint.line),
       m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)),
-      m_suffix_matching(dap.use_suffix_matching_breakpoints) {}
+      m_suffix_matching(true) {}
+      // TODO(toyang): DON'T COMMIT
+      // m_suffix_matching(dap.use_suffix_matching_breakpoints) {}
 
 llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
   lldb::SBMutex lock = m_dap.GetAPIMutex();
