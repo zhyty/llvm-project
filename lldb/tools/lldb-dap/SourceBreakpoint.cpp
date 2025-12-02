@@ -105,7 +105,8 @@ static size_t CountMatchingComponents(const lldb::SBFileSpec &target,
 }
 
 // TODO(toyang): unit testing? Better naming?
-// TODO(toyang): for simplicity's sake, only match one location here?
+// TODO(toyang): does this have to be threadsafe?
+// In ties, the breakpoint location with the lower index is chosen.
 static void
 EnableMaximallyMatchingLocation(const lldb::SBFileSpec &target_spec,
                                      lldb::SBBreakpoint &bp) {
@@ -115,10 +116,13 @@ EnableMaximallyMatchingLocation(const lldb::SBFileSpec &target_spec,
   // Get the maximal matches.
   const auto num_locations = bp.GetNumLocations();
   for (size_t i = 0; i < num_locations; ++i) {
+    auto bp_location = bp.GetLocationAtIndex(i);
+    if (!bp_location.IsEnabled())
+      continue;
+    
     const size_t current_match = CountMatchingComponents(
         target_spec,
-        bp.GetLocationAtIndex(i).GetAddress().GetLineEntry().GetFileSpec());
-    // TODO(toyang): does this have to be threadsafe?
+        bp_location.GetAddress().GetLineEntry().GetFileSpec());
 
     // New maximal match.
     if (current_match > maximal_match_so_far)  {
