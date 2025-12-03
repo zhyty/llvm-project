@@ -123,13 +123,13 @@ llvm::StringRef DAP::debug_adapter_path = "";
 
 DAP::DAP(Log *log, const ReplMode default_repl_mode,
          std::vector<std::string> pre_init_commands, bool no_lldbinit,
-         bool use_suffix_matching_breakpoints, llvm::StringRef client_name,
+         bool use_best_match_breakpoints, llvm::StringRef client_name,
          DAPTransport &transport, MainLoop &loop)
     : log(log), transport(transport), broadcaster("lldb-dap"),
       progress_event_reporter(
           [&](const ProgressEvent &event) { SendJSON(event.ToJSON()); }),
       repl_mode(default_repl_mode), no_lldbinit(no_lldbinit),
-      use_suffix_matching_breakpoints(use_suffix_matching_breakpoints),
+      use_best_match_breakpoints(use_best_match_breakpoints),
       m_client_name(client_name), m_loop(loop) {
   configuration.preInitCommands = std::move(pre_init_commands);
   RegisterRequests();
@@ -1506,19 +1506,17 @@ void DAP::EventThread() {
                event_type & lldb::eBreakpointEventTypeLocationsResolved) &&
               bp.MatchesName(BreakpointBase::kDAPBreakpointLabel)) {
 
-            // TODO(toyang): do we care about location removed and resolved, or just added?
-            // TODO(toyang): there could be room to optimize this more so it's quicker to lookup the source breakpoints by breakpoint ID.
-
             // If the breakpoint update matches a best-matching breakpoint, we
-            // need to check if the new location is a better match.
-            std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
-            for (auto &src_bp_entry : m_source_breakpoints) {
-              llvm::StringRef src_path = src_bp_entry.getKey(); 
-              auto &bp_map = src_bp_entry.getValue();
-              for (auto &pos_src_bp_entry : bp_map) {
-                SourceBreakpoint &src_bp = pos_src_bp_entry.second;
-                if (src_bp.GetID() == bp.GetID())
-                  src_bp.EnableBestMatchLocation(lldb::SBFileSpec(src_path.str().c_str()));
+            // need to check if the new location is a better match. We just
+            // naively loop through until we find a matching breakpoint ID.
+            if (use_best_match_breakpoints) {
+              std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
+              for (auto &[src_path, bp_map] : m_source_breakpoints) {
+                for (auto &[_pos, src_bp] : bp_map) {
+                  if (src_bp.GetID() == bp.GetID())
+                    src_bp.OnlyEnableBestMatchLocation(
+                        lldb::SBFileSpec(src_path.str().c_str()));
+                }
               }
             }
 
@@ -1591,7 +1589,6 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   } else {
     // Breakpoint set by a regular source file.
     const auto path = source.path.value_or("");
-    // TODO(toyang): maybe we need to change path here already?
     auto &existing_breakpoints = m_source_breakpoints[path];
     response_breakpoints =
         SetSourceBreakpoints(source, breakpoints, existing_breakpoints);
@@ -1600,7 +1597,6 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   return response_breakpoints;
 }
 
-// TODO(toyang): prototype here?
 std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
     const protocol::Source &source,
     const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints,
@@ -1619,7 +1615,8 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
           existing_breakpoints.try_emplace(bp_pos, src_bp);
       // We check if this breakpoint already exists to update it.
       if (inserted) {
-        if (llvm::Error error = iv->second.SetBreakpoint(source)) {
+        if (llvm::Error error =
+                iv->second.SetBreakpoint(source, use_best_match_breakpoints)) {
           protocol::Breakpoint invalid_breakpoint;
           invalid_breakpoint.message = llvm::toString(std::move(error));
           invalid_breakpoint.verified = false;

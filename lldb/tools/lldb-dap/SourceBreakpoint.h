@@ -27,7 +27,8 @@ public:
   SourceBreakpoint(DAP &d, const protocol::SourceBreakpoint &breakpoint);
 
   // Set this breakpoint in LLDB as a new breakpoint
-  llvm::Error SetBreakpoint(const protocol::Source &source);
+  llvm::Error SetBreakpoint(const protocol::Source &source,
+                            bool use_best_match_breakpoints);
   void UpdateBreakpoint(const SourceBreakpoint &request_bp);
 
   void SetLogMessage();
@@ -50,16 +51,21 @@ public:
   uint32_t GetLine() const { return m_line; }
   uint32_t GetColumn() const { return m_column; }
 
-  bool GetUseSuffixMatching() const { return m_suffix_matching; }
-
   /// Exclusively enables the best matching breakpoint location for the given
-  /// `target_spec`. 
-  /// 
+  /// \param target_spec.
+  ///
   /// If there is a tie between two locations, the lower index wins the tie.
-  void EnableBestMatchLocation(const lldb::SBFileSpec& target_spec);
+  void OnlyEnableBestMatchLocation(const lldb::SBFileSpec &target_spec);
 
 protected:
-  void CreatePathBreakpoint(const protocol::Source &source);
+  /// Create file line breakpoint given \param source.
+  ///
+  /// \param[in] use_best_match_breakpoints
+  ///     When true, if we do not find any breakpoint locations for the
+  ///     specified file path, then we fall back to a best-effort (i.e.
+  ///     suffix-based) match of file path.
+  void CreatePathBreakpoint(const protocol::Source &source,
+                            bool use_best_match_breakpoints);
   llvm::Error
   CreateAssemblyBreakpointWithSourceReference(int64_t source_reference);
   llvm::Error CreateAssemblyBreakpointWithPersistenceData(
@@ -80,10 +86,6 @@ protected:
 
   uint32_t m_line;   ///< The source line of the breakpoint or logpoint
   uint32_t m_column; ///< An optional source column of the breakpoint
-
-private:
-  bool m_suffix_matching; ///< Whether to use suffix-based best matching for
-                          ///< path if breakpoint is unresolved.
 };
 
 } // namespace lldb_dap

@@ -37,12 +37,10 @@ SourceBreakpoint::SourceBreakpoint(DAP &dap,
     : Breakpoint(dap, breakpoint.condition, breakpoint.hitCondition),
       m_log_message(breakpoint.logMessage.value_or("")),
       m_line(breakpoint.line),
-      m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)),
-      // TODO(toyang): DON'T COMMIT
-      m_suffix_matching(true) {}
-      // m_suffix_matching(dap.use_suffix_matching_breakpoints) {}
+      m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)) {}
 
-llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
+llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source,
+                                            bool use_best_match_breakpoints) {
   lldb::SBMutex lock = m_dap.GetAPIMutex();
   std::lock_guard<lldb::SBMutex> guard(lock);
 
@@ -65,12 +63,11 @@ llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
         return error;
     }
   } else {
-    CreatePathBreakpoint(source);
+    CreatePathBreakpoint(source, use_best_match_breakpoints);
   }
 
   if (!m_log_message.empty())
     SetLogMessage();
-  // TODO(toyang): not too sure what SetBreakpoint does here
   Breakpoint::SetBreakpoint();
   return llvm::Error::success();
 }
@@ -104,11 +101,9 @@ static size_t CountMatchingComponents(const lldb::SBFileSpec &target,
   return matches;
 }
 
-// TODO(toyang): unit testing? Better naming?
-// TODO(toyang): does this have to be threadsafe?
 // In ties, the breakpoint location with the lower index is chosen.
-void
-SourceBreakpoint::EnableBestMatchLocation(const lldb::SBFileSpec &target_spec) {
+void SourceBreakpoint::OnlyEnableBestMatchLocation(
+    const lldb::SBFileSpec &target_spec) {
   // Acquire API lock to avoid race conditions while we're observing breakpoint
   // locations.
   lldb::SBMutex lock = m_dap.GetAPIMutex();
@@ -144,12 +139,11 @@ SourceBreakpoint::EnableBestMatchLocation(const lldb::SBFileSpec &target_spec) {
       m_bp.GetLocationAtIndex(i).SetEnabled(false);
       continue;
     }
-    // TODO(toyang): add it to the source mapping for the breakpoint->source direction?
-    // const lldb::SBFileSpec matched_spec =  bp.GetLocationAtIndex(i).GetAddress().GetLineEntry().GetFileSpec();
   }
 }
 
-void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
+void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
+                                            bool use_best_match_breakpoints) {
   const auto source_path = source.path.value_or("");
   lldb::SBFileSpecList module_list;
 
@@ -157,18 +151,13 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
   // `source_path`.
   lldb::SBBreakpoint full_path_bp = m_dap.target.BreakpointCreateByLocation(
       source_path.c_str(), m_line, m_column, 0, module_list);
-  // TODO(toyang): double-check if we want num locations or resolved locations?
-  if (!GetUseSuffixMatching() || full_path_bp.GetNumLocations() > 0) {
+  if (!use_best_match_breakpoints || full_path_bp.GetNumLocations() > 0) {
     m_bp = full_path_bp;
     return;
   }
 
-  // TODO(toyang): breakpoints might not be resolved yet because missing dyld
-  // load. Need to test this.
-
-  // TODO(toyang): explain the scheme
-  // Fall back to suffix-based matching since the source_path breakpoint didn't
-  // resolve to any locations.
+  // Fall back to suffix-based best effort matching since the full path
+  // breakpoint didn't find any locations.
 
   m_dap.target.BreakpointDelete(full_path_bp.GetID());
 
@@ -177,7 +166,7 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
       source_file_spec.GetFilename(), m_line, m_column, 0, module_list);
   m_bp = filename_bp;
 
-  EnableBestMatchLocation(source_file_spec);
+  OnlyEnableBestMatchLocation(source_file_spec);
 }
 
 llvm::Error SourceBreakpoint::CreateAssemblyBreakpointWithSourceReference(

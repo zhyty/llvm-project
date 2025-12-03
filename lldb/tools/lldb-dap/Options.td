@@ -74,8 +74,8 @@ def: Flag<["-"], "x">,
   Alias<no_lldbinit>,
   HelpText<"Alias for --no-lldbinit">;
 
-def use_suffix_matching_breakpoints : F<"use-suffix-matching-breakpoints">,
-                                      HelpText<"TODO(toyang)">;
+def use_best_match_breakpoints : F<"use-best-match-breakpoints">,
+                                 HelpText<"TODO(toyang)">;
 
 def connection_timeout: S<"connection-timeout">,
   MetaVarName<"<timeout>">,
