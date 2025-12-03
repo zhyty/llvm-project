@@ -439,6 +439,7 @@ struct DAP final : public DAPTransport::MessageHandler {
   void OnClosed() override;
 
 private:
+  // Not protected by mutex.
   std::vector<protocol::Breakpoint> SetSourceBreakpoints(
       const protocol::Source &source,
       const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints,
@@ -488,6 +489,7 @@ private:
   std::mutex m_active_request_mutex;
   const protocol::Request *m_active_request;
 
+  std::mutex m_source_breakpoints_mutex;
   llvm::StringMap<SourceBreakpointMap> m_source_breakpoints;
   llvm::DenseMap<int64_t, SourceBreakpointMap> m_source_assembly_breakpoints;
 };

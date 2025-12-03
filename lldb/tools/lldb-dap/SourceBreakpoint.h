@@ -52,6 +52,12 @@ public:
 
   bool GetUseSuffixMatching() const { return m_suffix_matching; }
 
+  /// Exclusively enables the best matching breakpoint location for the given
+  /// `target_spec`. 
+  /// 
+  /// If there is a tie between two locations, the lower index wins the tie.
+  void EnableBestMatchLocation(const lldb::SBFileSpec& target_spec);
+
 protected:
   void CreatePathBreakpoint(const protocol::Source &source);
   llvm::Error

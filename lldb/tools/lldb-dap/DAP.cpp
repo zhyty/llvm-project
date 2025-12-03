@@ -1505,6 +1505,23 @@ void DAP::EventThread() {
                event_type & lldb::eBreakpointEventTypeLocationsRemoved ||
                event_type & lldb::eBreakpointEventTypeLocationsResolved) &&
               bp.MatchesName(BreakpointBase::kDAPBreakpointLabel)) {
+
+            // TODO(toyang): do we care about location removed and resolved, or just added?
+            // TODO(toyang): there could be room to optimize this more so it's quicker to lookup the source breakpoints by breakpoint ID.
+
+            // If the breakpoint update matches a best-matching breakpoint, we
+            // need to check if the new location is a better match.
+            std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
+            for (auto &src_bp_entry : m_source_breakpoints) {
+              llvm::StringRef src_path = src_bp_entry.getKey(); 
+              auto &bp_map = src_bp_entry.getValue();
+              for (auto &pos_src_bp_entry : bp_map) {
+                SourceBreakpoint &src_bp = pos_src_bp_entry.second;
+                if (src_bp.GetID() == bp.GetID())
+                  src_bp.EnableBestMatchLocation(lldb::SBFileSpec(src_path.str().c_str()));
+              }
+            }
+
             // As the DAP client already knows the path of this breakpoint, we
             // don't need to send it back as part of the "changed" event. This
             // avoids sending paths that should be source mapped. Note that
@@ -1562,6 +1579,8 @@ void DAP::HandleThreadEvent(const lldb::SBEvent &event) {
 std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
     const protocol::Source &source,
     const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints) {
+  std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
+
   std::vector<protocol::Breakpoint> response_breakpoints;
   if (source.sourceReference) {
     // Breakpoint set by assembly source.

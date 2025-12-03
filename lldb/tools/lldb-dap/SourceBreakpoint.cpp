@@ -38,8 +38,8 @@ SourceBreakpoint::SourceBreakpoint(DAP &dap,
       m_log_message(breakpoint.logMessage.value_or("")),
       m_line(breakpoint.line),
       m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)),
-      m_suffix_matching(true) {}
       // TODO(toyang): DON'T COMMIT
+      m_suffix_matching(true) {}
       // m_suffix_matching(dap.use_suffix_matching_breakpoints) {}
 
 llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
@@ -107,16 +107,20 @@ static size_t CountMatchingComponents(const lldb::SBFileSpec &target,
 // TODO(toyang): unit testing? Better naming?
 // TODO(toyang): does this have to be threadsafe?
 // In ties, the breakpoint location with the lower index is chosen.
-static void
-EnableMaximallyMatchingLocation(const lldb::SBFileSpec &target_spec,
-                                     lldb::SBBreakpoint &bp) {
+void
+SourceBreakpoint::EnableBestMatchLocation(const lldb::SBFileSpec &target_spec) {
+  // Acquire API lock to avoid race conditions while we're observing breakpoint
+  // locations.
+  lldb::SBMutex lock = m_dap.GetAPIMutex();
+  std::lock_guard<lldb::SBMutex> guard(lock);
+  
   size_t maximal_match_so_far = 0;
   std::optional<size_t> maximal_match;
 
   // Get the maximal matches.
-  const auto num_locations = bp.GetNumLocations();
+  const auto num_locations = m_bp.GetNumLocations();
   for (size_t i = 0; i < num_locations; ++i) {
-    auto bp_location = bp.GetLocationAtIndex(i);
+    auto bp_location = m_bp.GetLocationAtIndex(i);
     if (!bp_location.IsEnabled())
       continue;
     
@@ -137,13 +141,14 @@ EnableMaximallyMatchingLocation(const lldb::SBFileSpec &target_spec,
   // Disable all locations that weren't the maximal matches.
   for (size_t i = 0; i < num_locations; ++i) {
     if (i != maximal_match) {
-      bp.GetLocationAtIndex(i).SetEnabled(false);
+      m_bp.GetLocationAtIndex(i).SetEnabled(false);
       continue;
     }
     // TODO(toyang): add it to the source mapping for the breakpoint->source direction?
     // const lldb::SBFileSpec matched_spec =  bp.GetLocationAtIndex(i).GetAddress().GetLineEntry().GetFileSpec();
   }
 }
+
 void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
   const auto source_path = source.path.value_or("");
   lldb::SBFileSpecList module_list;
@@ -170,10 +175,9 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source) {
   const lldb::SBFileSpec source_file_spec(source_path.c_str());
   lldb::SBBreakpoint filename_bp = m_dap.target.BreakpointCreateByLocation(
       source_file_spec.GetFilename(), m_line, m_column, 0, module_list);
-
-  EnableMaximallyMatchingLocation(source_file_spec, filename_bp);
-
   m_bp = filename_bp;
+
+  EnableBestMatchLocation(source_file_spec);
 }
 
 llvm::Error SourceBreakpoint::CreateAssemblyBreakpointWithSourceReference(
