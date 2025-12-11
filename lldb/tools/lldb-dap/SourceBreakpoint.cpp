@@ -96,6 +96,8 @@ static size_t CountMatchingComponents(const lldb::SBFileSpec &target,
        ++target_rit, ++query_rit) {
     if (*target_rit == *query_rit)
       matches++;
+    else
+      break;
   }
 
   return matches;
@@ -161,12 +163,14 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
 
   m_dap.target.BreakpointDelete(full_path_bp.GetID());
 
-  const lldb::SBFileSpec source_file_spec(source_path.c_str());
+  lldb::SBFileSpec filename_only_bp(source_path.c_str());
+  filename_only_bp.SetDirectory(nullptr);
+
   lldb::SBBreakpoint filename_bp = m_dap.target.BreakpointCreateByLocation(
-      source_file_spec.GetFilename(), m_line, m_column, 0, module_list);
+      filename_only_bp, m_line, m_column, 0, module_list);
   m_bp = filename_bp;
 
-  OnlyEnableBestMatchLocation(source_file_spec);
+  OnlyEnableBestMatchLocation(source_path.c_str());
 }
 
 llvm::Error SourceBreakpoint::CreateAssemblyBreakpointWithSourceReference(
