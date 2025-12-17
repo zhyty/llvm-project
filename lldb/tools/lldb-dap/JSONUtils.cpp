@@ -964,7 +964,8 @@ static void FilterAndGetValueForKey(const lldb::SBStructuredData data,
   }
 }
 
-static void addStatistic(lldb::SBTarget &target, llvm::json::Object &event) {
+static void addStatistic(lldb::SBTarget &target, DAP &dap,
+                         llvm::json::Object &event) {
   lldb::SBStructuredData statistics = target.GetStatistics();
   bool is_dictionary =
       statistics.GetType() == lldb::eStructuredDataTypeDictionary;
@@ -979,13 +980,23 @@ static void addStatistic(lldb::SBTarget &target, llvm::json::Object &event) {
     const char *key = keys.GetStringAtIndex(i);
     FilterAndGetValueForKey(statistics, key, stats_body);
   }
+
+  // Add DAP-specific best match breakpoint statistics
+  if (dap.use_best_match_breakpoints &&
+      dap.best_match_bp_stats.fallback_count.load(std::memory_order_relaxed) >
+          0) {
+    stats_body.try_emplace("bestMatchBreakpoints",
+                           dap.best_match_bp_stats.ToJSON());
+  }
+
   llvm::json::Object body{{"$__lldb_statistics", std::move(stats_body)}};
   event.try_emplace("body", std::move(body));
 }
 
-llvm::json::Object CreateTerminatedEventObject(lldb::SBTarget &target) {
+llvm::json::Object CreateTerminatedEventObject(lldb::SBTarget &target,
+                                               DAP &dap) {
   llvm::json::Object event(CreateEventObject("terminated"));
-  addStatistic(target, event);
+  addStatistic(target, dap, event);
   return event;
 }
 

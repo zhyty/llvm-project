@@ -409,7 +409,8 @@ llvm::json::Object CreateRunInTerminalReverseRequest(
 ///
 /// \return
 ///     A body JSON object with debug info and breakpoint info
-llvm::json::Object CreateTerminatedEventObject(lldb::SBTarget &target);
+llvm::json::Object CreateTerminatedEventObject(lldb::SBTarget &target,
+                                               DAP &dap);
 
 /// Convert a given JSON object to a string.
 std::string JSONToString(const llvm::json::Value &json);

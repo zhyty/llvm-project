@@ -135,6 +135,12 @@ void SourceBreakpoint::OnlyEnableBestMatchLocation(
   if (!maximal_match.has_value())
     return;
 
+  // Record match quality
+  m_dap.best_match_bp_stats.total_match_score.fetch_add(
+      maximal_match_so_far, std::memory_order_relaxed);
+  m_dap.best_match_bp_stats.match_count.fetch_add(1,
+                                                   std::memory_order_relaxed);
+
   // Disable all locations that weren't the maximal matches.
   for (size_t i = 0; i < num_locations; ++i) {
     if (i != maximal_match) {
@@ -161,6 +167,10 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
   // Fall back to suffix-based best effort matching since the full path
   // breakpoint didn't find any locations.
 
+  // Track fallback attempt
+  m_dap.best_match_bp_stats.fallback_count.fetch_add(1,
+                                                      std::memory_order_relaxed);
+
   m_dap.target.BreakpointDelete(full_path_bp.GetID());
 
   lldb::SBFileSpec filename_only_bp(source_path.c_str());
@@ -169,6 +179,15 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
   lldb::SBBreakpoint filename_bp = m_dap.target.BreakpointCreateByLocation(
       filename_only_bp, m_line, m_column, 0, module_list);
   m_bp = filename_bp;
+
+  const size_t num_locations = m_bp.GetNumLocations();
+  if (num_locations > 0) {
+    m_dap.best_match_bp_stats.fallback_success_count.fetch_add(
+        1, std::memory_order_relaxed);
+  } else {
+    m_dap.best_match_bp_stats.fallback_failure_count.fetch_add(
+        1, std::memory_order_relaxed);
+  }
 
   OnlyEnableBestMatchLocation(source_path.c_str());
 }

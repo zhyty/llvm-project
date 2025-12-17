@@ -160,6 +160,21 @@ struct DAP final : public DAPTransport::MessageHandler {
   /// TODO(toyang):
   bool use_best_match_breakpoints;
 
+  struct BestMatchBreakpointStats {
+    // Counters
+    std::atomic<uint64_t> fallback_count{0};
+    std::atomic<uint64_t> fallback_success_count{0};
+    std::atomic<uint64_t> fallback_failure_count{0};
+    std::atomic<uint64_t> total_match_score{0};
+    std::atomic<uint64_t> match_count{0};
+
+    llvm::json::Object ToJSON() const;
+    void Reset();
+  };
+
+  BestMatchBreakpointStats best_match_bp_stats;
+
+
   /// The initial thread list upon attaching.
   std::vector<protocol::Thread> initial_thread_list;
 

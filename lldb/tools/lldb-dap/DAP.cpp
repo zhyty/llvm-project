@@ -915,7 +915,7 @@ void DAP::SendTerminatedEvent() {
   llvm::call_once(terminated_event_flag, [&] {
     RunTerminateCommands();
     // Send a "terminated" event
-    llvm::json::Object event(CreateTerminatedEventObject(target));
+    llvm::json::Object event(CreateTerminatedEventObject(target, *this));
     SendJSON(llvm::json::Value(std::move(event)));
   });
 }
@@ -1661,6 +1661,40 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   }
 
   return response_breakpoints;
+}
+
+llvm::json::Object DAP::BestMatchBreakpointStats::ToJSON() const {
+  llvm::json::Object stats;
+
+  uint64_t fallback = fallback_count.load(std::memory_order_relaxed);
+  uint64_t success = fallback_success_count.load(std::memory_order_relaxed);
+  uint64_t failure = fallback_failure_count.load(std::memory_order_relaxed);
+  uint64_t total_score = total_match_score.load(std::memory_order_relaxed);
+  uint64_t matches = match_count.load(std::memory_order_relaxed);
+
+  stats.try_emplace("fallbackAttempts", fallback);
+  stats.try_emplace("fallbackSuccesses", success);
+  stats.try_emplace("fallbackFailures", failure);
+
+  if (fallback > 0) {
+    double success_rate = (double)success / (double)fallback;
+    stats.try_emplace("fallbackSuccessRate", success_rate);
+  }
+
+  if (matches > 0) {
+    double avg_score = (double)total_score / (double)matches;
+    stats.try_emplace("averageMatchScore", avg_score);
+  }
+
+  return stats;
+}
+
+void DAP::BestMatchBreakpointStats::Reset() {
+  fallback_count.store(0, std::memory_order_relaxed);
+  fallback_success_count.store(0, std::memory_order_relaxed);
+  fallback_failure_count.store(0, std::memory_order_relaxed);
+  total_match_score.store(0, std::memory_order_relaxed);
+  match_count.store(0, std::memory_order_relaxed);
 }
 
 void DAP::RegisterRequests() {
