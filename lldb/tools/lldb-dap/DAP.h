@@ -157,7 +157,9 @@ struct DAP final : public DAPTransport::MessageHandler {
   /// Whether to disable sourcing .lldbinit files.
   bool no_lldbinit;
 
-  /// TODO(toyang):
+  /// Whether to use fall back "best match" breakpoints, which attempts to
+  /// approximately match a source breakpoint when the exact given source is not
+  /// found.
   bool use_best_match_breakpoints;
 
   struct BestMatchBreakpointStats {

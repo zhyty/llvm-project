@@ -1510,9 +1510,9 @@ void DAP::EventThread() {
             // need to check if the new location is a better match. We just
             // naively loop through until we find a matching breakpoint ID.
             if (use_best_match_breakpoints) {
-            lldb::SBMutex api_mutex = GetAPIMutex();
-            const std::scoped_lock<lldb::SBMutex, std::mutex> guard(
-                api_mutex, m_source_breakpoints_mutex);
+              lldb::SBMutex api_mutex = GetAPIMutex();
+              const std::scoped_lock<lldb::SBMutex, std::mutex> guard(
+                  api_mutex, m_source_breakpoints_mutex);
               for (auto &[src_path, bp_map] : m_source_breakpoints) {
                 for (auto &[_pos, src_bp] : bp_map) {
                   if (src_bp.GetID() == bp.GetID())

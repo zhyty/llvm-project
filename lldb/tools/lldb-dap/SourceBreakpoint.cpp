@@ -167,10 +167,6 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
   // Fall back to suffix-based best effort matching since the full path
   // breakpoint didn't find any locations.
 
-  // Track fallback attempt
-  m_dap.best_match_bp_stats.fallback_count.fetch_add(1,
-                                                      std::memory_order_relaxed);
-
   m_dap.target.BreakpointDelete(full_path_bp.GetID());
 
   lldb::SBFileSpec filename_only_bp(source_path.c_str());
@@ -180,6 +176,12 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
       filename_only_bp, m_line, m_column, 0, module_list);
   m_bp = filename_bp;
 
+  OnlyEnableBestMatchLocation(source_path.c_str());
+
+  // Track fallback attempt
+  m_dap.best_match_bp_stats.fallback_count.fetch_add(1,
+                                                      std::memory_order_relaxed);
+
   const size_t num_locations = m_bp.GetNumLocations();
   if (num_locations > 0) {
     m_dap.best_match_bp_stats.fallback_success_count.fetch_add(
@@ -188,8 +190,6 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
     m_dap.best_match_bp_stats.fallback_failure_count.fetch_add(
         1, std::memory_order_relaxed);
   }
-
-  OnlyEnableBestMatchLocation(source_path.c_str());
 }
 
 llvm::Error SourceBreakpoint::CreateAssemblyBreakpointWithSourceReference(
