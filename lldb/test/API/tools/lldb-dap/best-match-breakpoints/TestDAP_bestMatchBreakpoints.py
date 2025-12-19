@@ -10,8 +10,6 @@ import lldbdap_testcase
 from dap_server import Source
 import dap_server
 
-dap_server.DEFAULT_TIMEOUT = 1000
-
 
 class TestDAP_bestMatchBreakpoints(lldbdap_testcase.DAPTestCaseBase):
     @skipIfWindows
@@ -27,62 +25,65 @@ class TestDAP_bestMatchBreakpoints(lldbdap_testcase.DAPTestCaseBase):
             additional_args=["--use-best-match-breakpoints"]
         )
 
-        # Get the program path
         program = self.getBuildArtifact("a.out")
 
-        # Build and launch program.
-        # NOTE: need to set CWD to build directory so that the test fixture
-        # main.cpp can find the dynamic lib.
-        self.launch(program, cwd=self.getBuildDir(), preRunCommands=[f"settings set target.exec-search-paths {self.getBuildDir()}/lib"])
-
-        # TODO: 
-
-        # TODO: test relative path, absolute path
-
-        # We're only setting one bp per src file.
-        main_bp_id_1, main_bp_id_2, *_ = self.set_source_breakpoints(
-            "main.cpp", [15, 22]
+        # The CWD is necessary for the debuggee to locate the helper .so.
+        # The exec-search-path is necessary for the *debugger* to locate the
+        # helper .so.
+        self.launch(
+            program,
+            cwd=self.getBuildDir(),
+            preRunCommands=[
+                f"settings set target.exec-search-paths {self.getBuildDir()}/lib"
+            ],
         )
 
-        # TODO: why doesn't this get set in the right place?
-        # utils_src = "best-match-breakpoints/lib/utils.cpp"
-        # utils_src = self.get_src_full_path("lib/utils.cpp")
-        # TODO(toyang): so it's properly setting up the utils.cpp filename-only breakpoint. But we're not seeing the breakpoint changed event... Why?
-
-        lib_util_bp_id, *_ = self.set_source_breakpoints(
-            "/some/fake/path/lib/utils.cpp",
-            [7],
-            wait_for_resolve=False,
+        # We're only setting one bp per src file.
+        main_bp_pre_load, main_bp_post_load, *_ = self.set_source_breakpoints(
+            "main.cpp",
+            [
+                line_number("main.cpp", "// BREAK BEFORE .SO LOAD"),
+                line_number("main.cpp", "// BREAK AFTER .SO LOAD"),
+            ],
         )
 
         # Continue execution - we should hit the first breakpoint in main.cpp
         self.dap_server.request_continue()
-        self.verify_breakpoint_hit([main_bp_id_1])
+        self.verify_breakpoint_hit([main_bp_pre_load])
         frames = self.dap_server.request_stackTrace()["body"]["stackFrames"]
         self.assertIn("main.cpp", frames[0]["source"]["name"])
+
+        # This is what we're testing -- it should fall back to the "best match breakpoint, which is at first the root utils.cpp file.
+        lib_util_bp_id, *_ = self.set_source_breakpoints(
+            "/some/fake/path/lib/utils.cpp",
+            [7],
+        )
+        current_bps = self.get_all_breakpoints()
+        self.assertEqual(
+            current_bps[int(lib_util_bp_id)]["source"]["path"],
+            self.get_src_full_path("utils.cpp"),
+        )
 
         # Continue execution - we should hit the second breakpoint in main.cpp
         self.dap_server.request_continue()
-        self.verify_breakpoint_hit([main_bp_id_2])
+        self.verify_breakpoint_hit([main_bp_post_load])
         frames = self.dap_server.request_stackTrace()["body"]["stackFrames"]
         self.assertIn("main.cpp", frames[0]["source"]["name"])
 
-        # TODO(toyang): check if utils.cpp is a breakpoint, and how many locations
-        self.dap_server.request_testGetTargetBreakpoints()
+        # After the .so load, we should have a new breakpoint at lib/utils.cpp
+        current_bps = self.get_all_breakpoints()
+        self.assertEqual(
+            current_bps[int(lib_util_bp_id)]["source"]["path"],
+            self.get_src_full_path("lib/utils.cpp"),
+        )
 
         # Continue to the next breakpoint - should hit lib/utils.cpp
         self.dap_server.request_continue()
         self.verify_breakpoint_hit([lib_util_bp_id])
         frames = self.dap_server.request_stackTrace()["body"]["stackFrames"]
-        self.assertEqual(self.get_src_full_path("lib/utils.cpp"), frames[0]["source"]["path"])
-
-        # # Verify the breakpoint_here variable is 42 (from lib/utils.cpp, not 99 from main/utils.cpp)
-        # breakpoint_here = int(self.dap_server.get_local_variable_value("breakpoint_here"))
-        # self.assertEqual(
-        #     breakpoint_here,
-        #     42,
-        #     "Expected lib/utils.cpp breakpoint_here value (42), not main/utils.cpp value (99)",
-        # )
+        self.assertEqual(
+            self.get_src_full_path("lib/utils.cpp"), frames[0]["source"]["path"]
+        )
 
     def get_src_full_path(self, src_filename: str) -> str:
         return os.path.join(self.getSourceDir(), src_filename)

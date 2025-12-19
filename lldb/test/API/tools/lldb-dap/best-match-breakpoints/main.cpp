@@ -1,64 +1,35 @@
+#include <cassert>
 #include <dlfcn.h>
 #include <iostream>
 
 namespace main_ns {
+// In utils.cpp
 void utilsFunction();
 }
 
 // Function pointer types for the library functions
-typedef int (*ComputeValueFunc)(int);
-typedef void (*PrintHelperMessageFunc)();
-typedef void (*UtilsFunctionFunc)();
+typedef void (*HelperUtilsFuncType)();
 
 int main() {
-  // Open the shared library
+  // BREAK BEFORE .SO LOAD
+  std::cout << "Before loading the dynamic library." << std::endl;
+
   void *handle = dlopen("lib/libhelper.so", RTLD_NOW);
-  if (handle == nullptr) {
-    std::cerr << "Error loading library: " << dlerror() << std::endl;
-    return 1;
-  }
+  assert(handle && "Failed to load library");
 
-  // Clear any existing errors
-  dlerror();
+  // BREAK AFTER .SO LOAD
+  std::cout <<"After loading the dynamic library." << std::endl;
 
-  // Load function symbols from the library
-  auto computeValue = reinterpret_cast<ComputeValueFunc>(
-      dlsym(handle, "_ZN6helper12computeValueEi"));
-  if (!computeValue) {
-    std::cerr << "Error loading computeValue: " << dlerror() << std::endl;
-    dlclose(handle);
-    return 1;
-  }
-
-  auto printHelperMessage = reinterpret_cast<PrintHelperMessageFunc>(
-      dlsym(handle, "_ZN6helper18printHelperMessageEv"));
-  if (!printHelperMessage) {
-    std::cerr << "Error loading printHelperMessage: " << dlerror() << std::endl;
-    dlclose(handle);
-    return 1;
-  }
-
-  auto helperUtilsFunction = reinterpret_cast<UtilsFunctionFunc>(
+  auto helperUtilsFunction = reinterpret_cast<HelperUtilsFuncType>(
       dlsym(handle, "_ZN6helper13utilsFunctionEv"));
-  if (!helperUtilsFunction) {
-    std::cerr << "Error loading utilsFunction: " << dlerror() << std::endl;
-    dlclose(handle);
-    return 1;
-  }
+  assert(helperUtilsFunction && "Failed to load utilsFunction from helper so");
 
-  // Call helper library functions via function pointers
-  printHelperMessage();
-  int result = computeValue(5);
-  std::cout << "Computed value: " << result << std::endl;
-
-  // Call utils functions from both locations
-  std::cout << "\nCalling main/utils.cpp:" << std::endl;
+  std::cout << "\nCalling main exec's utils.cpp:" << std::endl;
   main_ns::utilsFunction();
 
   std::cout << "\nCalling lib/utils.cpp:" << std::endl;
   helperUtilsFunction();
 
-  // Close the library
   dlclose(handle);
 
   return 0;

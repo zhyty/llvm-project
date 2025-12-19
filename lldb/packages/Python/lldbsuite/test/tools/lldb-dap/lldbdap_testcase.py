@@ -120,6 +120,34 @@ class DAPTestCaseBase(TestBase):
             self.wait_for_breakpoints_to_resolve(breakpoint_ids)
         return breakpoint_ids
 
+    def get_all_breakpoints(
+        self
+    ) -> dict[int, Any]:
+        """Returns a dictionary of all breakpoints via the `_testGetTargetBreakpoints` request.
+
+        The dictionary is keyed by breakpoint ID (as an int to be consistent
+        with the response), and the value is the breakpoint object, e.g.:
+        ```
+        {
+            "column": 7,
+            "id": 4,
+            "instructionReference": "0x55E66F9A4D8A",
+            "line": 7,
+            "source": {
+              "name": "utils.cpp",
+              "path": "/full/path/to/utils.cpp"
+            },
+            "verified": true
+        }
+        ```
+        """
+        breakpoints = {}
+        dap_response = self.dap_server.request_testGetTargetBreakpoints()
+        for breakpoint_obj in dap_response["body"]["breakpoints"]:
+            breakpoints[breakpoint_obj["id"]] = breakpoint_obj
+
+        return breakpoints
+
     def wait_for_breakpoints_to_resolve(self, breakpoint_ids: list[str]):
         unresolved_breakpoints = self.dap_server.wait_for_breakpoints_to_be_verified(
             breakpoint_ids
