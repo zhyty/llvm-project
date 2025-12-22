@@ -85,5 +85,12 @@ class TestDAP_bestMatchBreakpoints(lldbdap_testcase.DAPTestCaseBase):
             self.get_src_full_path("lib/utils.cpp"), frames[0]["source"]["path"]
         )
 
+        # Test best match statistics are appropriately updated
+        self.continue_to_exit()
+        statistics = self.dap_server.wait_for_terminated()["body"]["$__lldb_statistics"]
+        self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackAttempts"], 1)
+        self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackSuccesses"], 1)
+        self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackFailures"], 0)
+
     def get_src_full_path(self, src_filename: str) -> str:
         return os.path.join(self.getSourceDir(), src_filename)
