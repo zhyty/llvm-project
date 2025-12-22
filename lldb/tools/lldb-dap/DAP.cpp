@@ -568,6 +568,25 @@ ExceptionBreakpoint *DAP::GetExceptionBPFromStopReason(lldb::SBThread &thread) {
   return exc_bp;
 }
 
+SourceBreakpoint *DAP::GetBestMatchSourceBPFromStopReason(lldb::SBThread &thread) {
+  const auto num = thread.GetStopReasonDataCount();
+  std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
+
+  for (size_t i = 0; i < num; i += 2) {
+    lldb::break_id_t bp_id = thread.GetStopReasonDataAtIndex(i);
+
+    // Search through all source breakpoints to find matching ID
+    for (auto &[path, bp_map] : m_source_breakpoints) {
+      for (auto &[key, bp] : bp_map) {
+        if (bp.GetID() == bp_id && bp.IsBestMatchFallback()) {
+          return &bp;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
 lldb::SBThread DAP::GetLLDBThread(lldb::tid_t tid) {
   return target.GetProcess().GetThreadByID(tid);
 }
@@ -1686,6 +1705,9 @@ llvm::json::Object DAP::BestMatchBreakpointStats::ToJSON() const {
     stats.try_emplace("averageMatchScore", avg_score);
   }
 
+  uint64_t hits = hit_count.load(std::memory_order_relaxed);
+  stats.try_emplace("hitCount", hits);
+
   return stats;
 }
 
@@ -1695,6 +1717,7 @@ void DAP::BestMatchBreakpointStats::Reset() {
   fallback_failure_count.store(0, std::memory_order_relaxed);
   total_match_score.store(0, std::memory_order_relaxed);
   match_count.store(0, std::memory_order_relaxed);
+  hit_count.store(0, std::memory_order_relaxed);
 }
 
 void DAP::RegisterRequests() {

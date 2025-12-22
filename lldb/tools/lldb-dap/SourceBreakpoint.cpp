@@ -175,6 +175,7 @@ void SourceBreakpoint::CreatePathBreakpoint(const protocol::Source &source,
   lldb::SBBreakpoint filename_bp = m_dap.target.BreakpointCreateByLocation(
       filename_only_bp, m_line, m_column, 0, module_list);
   m_bp = filename_bp;
+  m_is_best_match_fallback = true;
 
   OnlyEnableBestMatchLocation(source_path.c_str());
 
