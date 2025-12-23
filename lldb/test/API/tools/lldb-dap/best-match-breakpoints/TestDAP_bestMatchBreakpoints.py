@@ -91,6 +91,7 @@ class TestDAP_bestMatchBreakpoints(lldbdap_testcase.DAPTestCaseBase):
         self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackAttempts"], 1)
         self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackSuccesses"], 1)
         self.assertEqual(statistics["bestMatchBreakpoints"]["fallbackFailures"], 0)
+        self.assertEqual(statistics["bestMatchBreakpoints"]["hitCount"], 1)
 
     def get_src_full_path(self, src_filename: str) -> str:
         return os.path.join(self.getSourceDir(), src_filename)

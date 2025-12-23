@@ -167,8 +167,6 @@ struct DAP final : public DAPTransport::MessageHandler {
     std::atomic<uint64_t> fallback_count{0};
     std::atomic<uint64_t> fallback_success_count{0};
     std::atomic<uint64_t> fallback_failure_count{0};
-    std::atomic<uint64_t> total_match_score{0};
-    std::atomic<uint64_t> match_count{0};
     std::atomic<uint64_t> hit_count{0};
 
     llvm::json::Object ToJSON() const;
@@ -260,9 +258,9 @@ struct DAP final : public DAPTransport::MessageHandler {
 
   ExceptionBreakpoint *GetExceptionBPFromStopReason(lldb::SBThread &thread);
 
-  /// Returns a SourceBreakpoint if thread stopped on any best-match fallback
-  /// breakpoint, nullptr otherwise. Returns the first best-match fallback found.
-  SourceBreakpoint *GetBestMatchSourceBPFromStopReason(lldb::SBThread &thread);
+  /// Returns true if the thread is stopped and one of the stop reasons is a
+  /// best-match breakpoint.
+  bool BestMatchBPIsStopReason(lldb::SBThread &thread);
 
   lldb::SBThread GetLLDBThread(lldb::tid_t id);
   lldb::SBThread GetLLDBThread(const llvm::json::Object &arguments);

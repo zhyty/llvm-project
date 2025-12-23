@@ -221,6 +221,9 @@ llvm::Error SendThreadStoppedEvent(DAP &dap, bool on_entry) {
       dap.thread_ids.insert(thread.GetThreadID());
       if (ThreadHasStopReason(thread)) {
         dap.SendJSON(CreateThreadStopped(dap, thread, stop_id));
+        if (dap.BestMatchBPIsStopReason(thread))
+          dap.best_match_bp_stats.hit_count.fetch_add(
+              1, std::memory_order_relaxed);
       }
     }
   }

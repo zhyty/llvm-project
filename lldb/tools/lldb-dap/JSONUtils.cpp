@@ -650,11 +650,6 @@ llvm::json::Value CreateThreadStopped(DAP &dap, lldb::SBThread &thread,
     body.try_emplace("reason", "step");
     break;
   case lldb::eStopReasonBreakpoint: {
-    // Track best-match fallback breakpoint hits
-    if (dap.GetBestMatchSourceBPFromStopReason(thread)) {
-      dap.best_match_bp_stats.hit_count.fetch_add(1, std::memory_order_relaxed);
-    }
-
     ExceptionBreakpoint *exc_bp = dap.GetExceptionBPFromStopReason(thread);
     if (exc_bp) {
       body.try_emplace("reason", "exception");

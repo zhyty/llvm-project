@@ -50,13 +50,16 @@ public:
 
   uint32_t GetLine() const { return m_line; }
   uint32_t GetColumn() const { return m_column; }
-  bool IsBestMatchFallback() const { return m_is_best_match_fallback; }
 
   /// Exclusively enables the best matching breakpoint location for the given
   /// \param target_spec.
   ///
   /// If there is a tie between two locations, the lower index wins the tie.
   void OnlyEnableBestMatchLocation(const lldb::SBFileSpec &target_spec);
+
+  /// Name added to best-match breakpoints to distinguish them when updating
+  /// best-match breakpoints or counting statistics.
+  static constexpr const char *kDAPBestMatchBreakpointLabel = "dapBestMatch";
 
 protected:
   /// Create file line breakpoint given \param source.
@@ -87,7 +90,6 @@ protected:
 
   uint32_t m_line;   ///< The source line of the breakpoint or logpoint
   uint32_t m_column; ///< An optional source column of the breakpoint
-  bool m_is_best_match_fallback = false; ///< True if this breakpoint was created via best-match fallback
 };
 
 } // namespace lldb_dap

@@ -568,23 +568,20 @@ ExceptionBreakpoint *DAP::GetExceptionBPFromStopReason(lldb::SBThread &thread) {
   return exc_bp;
 }
 
-SourceBreakpoint *DAP::GetBestMatchSourceBPFromStopReason(lldb::SBThread &thread) {
+bool DAP::BestMatchBPIsStopReason(lldb::SBThread &thread) {
+  // Only check breakpoint data if the stop reason is a breakpoint
+  if (thread.GetStopReason() != lldb::eStopReasonBreakpoint)
+    return false;
+
   const auto num = thread.GetStopReasonDataCount();
-  std::lock_guard<std::mutex> guard(m_source_breakpoints_mutex);
 
   for (size_t i = 0; i < num; i += 2) {
     lldb::break_id_t bp_id = thread.GetStopReasonDataAtIndex(i);
-
-    // Search through all source breakpoints to find matching ID
-    for (auto &[path, bp_map] : m_source_breakpoints) {
-      for (auto &[key, bp] : bp_map) {
-        if (bp.GetID() == bp_id && bp.IsBestMatchFallback()) {
-          return &bp;
-        }
-      }
-    }
+    lldb::SBBreakpoint bp = target.FindBreakpointByID(bp_id);
+    if (bp.MatchesName(SourceBreakpoint::kDAPBestMatchBreakpointLabel))
+      return true;
   }
-  return nullptr;
+  return false;
 }
 
 lldb::SBThread DAP::GetLLDBThread(lldb::tid_t tid) {
@@ -1688,22 +1685,10 @@ llvm::json::Object DAP::BestMatchBreakpointStats::ToJSON() const {
   uint64_t fallback = fallback_count.load(std::memory_order_relaxed);
   uint64_t success = fallback_success_count.load(std::memory_order_relaxed);
   uint64_t failure = fallback_failure_count.load(std::memory_order_relaxed);
-  uint64_t total_score = total_match_score.load(std::memory_order_relaxed);
-  uint64_t matches = match_count.load(std::memory_order_relaxed);
 
   stats.try_emplace("fallbackAttempts", fallback);
   stats.try_emplace("fallbackSuccesses", success);
   stats.try_emplace("fallbackFailures", failure);
-
-  if (fallback > 0) {
-    double success_rate = (double)success / (double)fallback;
-    stats.try_emplace("fallbackSuccessRate", success_rate);
-  }
-
-  if (matches > 0) {
-    double avg_score = (double)total_score / (double)matches;
-    stats.try_emplace("averageMatchScore", avg_score);
-  }
 
   uint64_t hits = hit_count.load(std::memory_order_relaxed);
   stats.try_emplace("hitCount", hits);
@@ -1715,8 +1700,6 @@ void DAP::BestMatchBreakpointStats::Reset() {
   fallback_count.store(0, std::memory_order_relaxed);
   fallback_success_count.store(0, std::memory_order_relaxed);
   fallback_failure_count.store(0, std::memory_order_relaxed);
-  total_match_score.store(0, std::memory_order_relaxed);
-  match_count.store(0, std::memory_order_relaxed);
   hit_count.store(0, std::memory_order_relaxed);
 }
 
