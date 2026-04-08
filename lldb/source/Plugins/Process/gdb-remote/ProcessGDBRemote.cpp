@@ -5887,11 +5887,12 @@ void ProcessGDBRemote::ModulesDidLoad(ModuleList &module_list) {
   // do anything
   Process::ModulesDidLoad(module_list);
 
-  // TODO(toyang): does this specifically need to be in ProcessGDBRemote?
-  // TODO(toyang): iterate through all plugin targets?
-  if (TargetSP gpu_target_sp = GetTarget().GetAnyGPUPluginTarget())
-    if (PlatformSP platform_sp = gpu_target_sp->GetPlatform())
-      platform_sp->ProcessHostModules(module_list, GetTarget());
+  GetTarget().ForEachGPUPluginTarget(
+      [&](llvm::StringRef, const TargetSP &gpu_target_sp) {
+        if (PlatformSP platform_sp = gpu_target_sp->GetPlatform())
+          platform_sp->ProcessHostModules(module_list, GetTarget());
+        return IterationAction::Continue;
+      });
 
   // After loading shared libraries, we can ask our remote GDB server if it
   // needs any symbols.
